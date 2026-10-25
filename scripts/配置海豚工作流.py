@@ -274,33 +274,43 @@ def upsert_workflow(
     locations_by_key: dict[str, tuple[int, int]] | None = None,
 ) -> int:
     existing = {item["name"]: item for item in client.definitions(project_code)}.get(name)
-    if existing and existing["releaseState"] == "ONLINE":
-        client.release(project_code, int(existing["code"]), "OFFLINE")
-    task_definitions, relations, locations = workflow_payload(
-        client,
-        project_code,
-        tasks,
-        edges,
-        locations_by_key,
-    )
-    params = {
-        "name": name,
-        "description": description,
-        "globalParams": "[]",
-        "locations": json.dumps(locations, ensure_ascii=False, separators=(",", ":")),
-        "timeout": 0,
-        "taskRelationJson": json.dumps(relations, ensure_ascii=False, separators=(",", ":")),
-        "taskDefinitionJson": json.dumps(task_definitions, ensure_ascii=False, separators=(",", ":")),
-        "executionType": "SERIAL_WAIT",
-    }
-    if existing:
-        code = int(existing["code"])
-        data = client.request("PUT", f"/projects/{project_code}/process-definition/{code}", data=params)
-    else:
-        data = client.request("POST", f"/projects/{project_code}/process-definition", data=params)
-        code = int(data["code"] if isinstance(data, dict) else data)
-    if online:
-        client.release(project_code, code, "ONLINE")
+    was_online = bool(existing and existing["releaseState"] == "ONLINE")
+    existing_code = int(existing["code"]) if existing else None
+    if was_online:
+        client.release(project_code, existing_code, "OFFLINE")
+    try:
+        task_definitions, relations, locations = workflow_payload(
+            client,
+            project_code,
+            tasks,
+            edges,
+            locations_by_key,
+        )
+        params = {
+            "name": name,
+            "description": description,
+            "globalParams": "[]",
+            "locations": json.dumps(locations, ensure_ascii=False, separators=(",", ":")),
+            "timeout": 0,
+            "taskRelationJson": json.dumps(relations, ensure_ascii=False, separators=(",", ":")),
+            "taskDefinitionJson": json.dumps(task_definitions, ensure_ascii=False, separators=(",", ":")),
+            "executionType": "SERIAL_WAIT",
+        }
+        if existing:
+            code = existing_code
+            data = client.request("PUT", f"/projects/{project_code}/process-definition/{code}", data=params)
+        else:
+            data = client.request("POST", f"/projects/{project_code}/process-definition", data=params)
+            code = int(data["code"] if isinstance(data, dict) else data)
+        if online:
+            client.release(project_code, code, "ONLINE")
+    except Exception:
+        if was_online and existing_code is not None:
+            try:
+                client.release(project_code, existing_code, "ONLINE")
+            except Exception as restore_exc:
+                raise RuntimeError("工作流发布失败，且旧工作流恢复上线失败") from restore_exc
+        raise
     print(f"[WORKFLOW] {name}: code={code}; state={'ONLINE' if online else 'OFFLINE'}", flush=True)
     return code
 
