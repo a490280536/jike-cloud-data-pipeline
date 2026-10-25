@@ -157,6 +157,12 @@ def load_curl_info(curl_path: str | None) -> dict[str, Any]:
 
 def signed_params(params: dict[str, Any], authorization: str) -> dict[str, str]:
     out = {key: "" if value is None else str(value) for key, value in params.items()}
+    if not WEB_SIGN_SECRET:
+        if not out.get("sign"):
+            raise RuntimeError(
+                "缺少 JKY_WEB_SIGN_SECRET，且捕获 cURL 没有可直接回放的 sign"
+            )
+        return out
     out["timestamp"] = str(int(time.time() * 1000))
     out["access_token"] = authorization
     out["appkey"] = WEB_APP_KEY
@@ -235,6 +241,12 @@ def find_list_and_total(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], 
 
 def fetch_all_channels(curl_info: dict[str, Any], page_size: int) -> list[dict[str, Any]]:
     base_params = dict(curl_info["params"])
+    if not WEB_SIGN_SECRET:
+        with requests.Session() as session:
+            payload = request_json(session, curl_info, base_params)
+        rows, total = find_list_and_total(payload)
+        print(f"[INFO] captured request: {len(rows)} rows" + (f", total={total}" if total is not None else ""), flush=True)
+        return rows
     base_params["pageSize"] = str(page_size)
     rows_all: list[dict[str, Any]] = []
     page_index = 0

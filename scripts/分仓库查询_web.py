@@ -202,6 +202,12 @@ def parse_curl_file(curl_path: str) -> dict[str, Any]:
 
 def signed_params(params: dict[str, Any], authorization: str, exclude: set[str] | None = None) -> dict[str, str]:
     out = {key: "" if value is None else str(value) for key, value in params.items()}
+    if not WEB_SIGN_SECRET:
+        if not out.get("sign"):
+            raise RuntimeError(
+                "缺少 JKY_WEB_SIGN_SECRET，且捕获 cURL 没有可直接回放的 sign"
+            )
+        return out
     out["timestamp"] = str(int(time.time() * 1000))
     out["access_token"] = authorization
     out["appkey"] = WEB_APP_KEY
@@ -378,6 +384,13 @@ def find_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def fetch_all_stock_rows(curl_info: dict[str, Any], page_size: int) -> list[dict[str, Any]]:
     if "warehouseStock/stockSkuList" not in curl_info["url"]:
         raise ValueError("Direct paging requires a stockSkuList cURL")
+
+    if not WEB_SIGN_SECRET:
+        with requests.Session() as session:
+            payload = request_list_json(session, curl_info, dict(curl_info["params"]))
+        rows = find_rows(payload)
+        print(f"[INFO] captured request: {len(rows)} rows", flush=True)
+        return rows
 
     base_params = dict(curl_info["params"])
     base_params["pageSize"] = str(page_size)
