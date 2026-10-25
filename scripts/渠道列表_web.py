@@ -19,7 +19,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 import pymysql
@@ -126,7 +126,9 @@ def parse_curl_text(raw: str) -> dict[str, Any]:
         )
     if not data_raw:
         if "/jkyun/erp-baseinfo/open/salechannel/openlist" in url:
-            params = {}
+            split = urlsplit(url)
+            params = dict(parse_qsl(split.query, keep_blank_values=True))
+            url = urlunsplit((split.scheme, split.netloc, split.path, "", split.fragment))
         else:
             raise ValueError("Could not find --data-raw in cURL")
     else:
@@ -191,8 +193,11 @@ def web_headers(curl_info: dict[str, Any]) -> dict[str, str]:
 
 def request_json(session: requests.Session, curl_info: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     headers = web_headers(curl_info)
-    if "/jkyun/erp-baseinfo/open/salechannel/openlist" in curl_info["url"] and not params:
-        response = session.get(curl_info["url"], headers=headers, timeout=90)
+    if "/jkyun/erp-baseinfo/open/salechannel/openlist" in curl_info["url"]:
+        query = signed_params(params, headers["authorization"])
+        split = urlsplit(curl_info["url"])
+        url = urlunsplit((split.scheme, split.netloc, split.path, urlencode(query), split.fragment))
+        response = session.get(url, headers=headers, timeout=90)
     else:
         body = signed_params(params, headers["authorization"])
         response = session.post(curl_info["url"], headers=headers, data=urlencode(body), timeout=90)
