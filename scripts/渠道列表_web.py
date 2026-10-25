@@ -116,12 +116,13 @@ def parse_curl_text(raw: str) -> dict[str, Any]:
 
     accepted_endpoints = (
         "getsaleschannelinfoforcols",
+        "/jkyun/erp-baseinfo/open/salechannel/openlist",
         "/jkyun/wms-kernel/order/base/sales/channel",
     )
     if not any(endpoint in url for endpoint in accepted_endpoints):
         raise ValueError(
             "Please provide a channel-list Copy-as-CURL "
-            "(getsaleschannelinfoforcols or /jkyun/wms-kernel/order/base/sales/channel)"
+            "(getsaleschannelinfoforcols or a known sale-channel endpoint)"
         )
     if not data_raw:
         raise ValueError("Could not find --data-raw in cURL")
