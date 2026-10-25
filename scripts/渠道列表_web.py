@@ -125,8 +125,12 @@ def parse_curl_text(raw: str) -> dict[str, Any]:
             "(getsaleschannelinfoforcols or a known sale-channel endpoint)"
         )
     if not data_raw:
-        raise ValueError("Could not find --data-raw in cURL")
-    params = dict(parse_qsl(data_raw, keep_blank_values=True))
+        if "/jkyun/erp-baseinfo/open/salechannel/openlist" in url:
+            params = {}
+        else:
+            raise ValueError("Could not find --data-raw in cURL")
+    else:
+        params = dict(parse_qsl(data_raw, keep_blank_values=True))
     return {"url": url, "headers": headers, "cookie": cookie, "params": params}
 
 
@@ -187,8 +191,11 @@ def web_headers(curl_info: dict[str, Any]) -> dict[str, str]:
 
 def request_json(session: requests.Session, curl_info: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     headers = web_headers(curl_info)
-    body = signed_params(params, headers["authorization"])
-    response = session.post(curl_info["url"], headers=headers, data=urlencode(body), timeout=90)
+    if "/jkyun/erp-baseinfo/open/salechannel/openlist" in curl_info["url"] and not params:
+        response = session.get(curl_info["url"], headers=headers, timeout=90)
+    else:
+        body = signed_params(params, headers["authorization"])
+        response = session.post(curl_info["url"], headers=headers, data=urlencode(body), timeout=90)
     text = response.text
     try:
         data = response.json()
