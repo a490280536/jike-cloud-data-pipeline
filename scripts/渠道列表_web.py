@@ -114,8 +114,15 @@ def parse_curl_text(raw: str) -> dict[str, Any]:
             url = token
         i += 1
 
-    if "getsaleschannelinfoforcols" not in url:
-        raise ValueError("Please provide a getsaleschannelinfoforcols Copy-as-cURL")
+    accepted_endpoints = (
+        "getsaleschannelinfoforcols",
+        "/jkyun/wms-kernel/order/base/sales/channel",
+    )
+    if not any(endpoint in url for endpoint in accepted_endpoints):
+        raise ValueError(
+            "Please provide a channel-list Copy-as-CURL "
+            "(getsaleschannelinfoforcols or /jkyun/wms-kernel/order/base/sales/channel)"
+        )
     if not data_raw:
         raise ValueError("Could not find --data-raw in cURL")
     params = dict(parse_qsl(data_raw, keep_blank_values=True))
