@@ -4,19 +4,22 @@
 
 吉客云网页版导出同步脚本集合。脚本复用浏览器 DevTools 复制的 cURL，重新计算 web 签名，创建导出任务，轮询系统任务，下载 xlsx，最后写入 MySQL。
 
-当前主要用于 DolphinScheduler 资源目录：
+代码事实源与运行数据目录分离。当前 Git 代码根目录为：
 
 ```text
-/dolphinscheduler/default/resources/jike-cloud-data-pipeline
+D:\code\jike-cloud-data-pipeline
 ```
 
-Windows 对应目录：
+真实认证材料、业务数据和运行产物统一放在本机受控目录：
 
 ```text
-D:\code\anzhuanghaitun\ds_resources\default\resources\jike-cloud-data-pipeline
+D:\JKY\auth
+D:\JKY\secrets
+D:\JKY\staging
+D:\JKY\output
 ```
 
-该目录才是 Git 根目录。上层目录包含 DolphinScheduler 日志、Worker 数据、PostgreSQL 和 ZooKeeper 数据卷，不得纳入本仓库。
+旧的 `D:\code\anzhuanghaitun\ds_resources\...` 路径已不作为当前代码入口。部署到 Worker 前必须从 Git 根目录发布并记录 commit；Worker 运行目录和 Docker 数据卷不得反向作为代码源。完整边界见 `docs/DEPLOYMENT_BOUNDARIES.md`。
 
 ## 安全边界
 

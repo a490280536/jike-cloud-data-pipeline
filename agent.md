@@ -4,18 +4,21 @@
 
 吉客云网页版数据同步脚本。通过 DevTools 复制的 cURL 复用页面筛选条件，脚本重新签名后调用吉客云网页接口或导出任务，并写入 MySQL `ods` 库。
 
-Git 仓库根目录是本 `jike-cloud-data-pipeline` 目录；上层 `anzhuanghaitun` 是 DolphinScheduler 运行目录，包含日志和数据库卷，不应整体初始化或推送为 Git 仓库。
+GitHub 唯一代码事实源是本 `jike-cloud-data-pipeline` 目录；真实认证材料、业务数据和运行产物统一在 `D:\JKY\...` 受控目录，不应复制进仓库或反向从 Worker 数据卷取作代码源。完整边界见 `docs/DEPLOYMENT_BOUNDARIES.md`。
 
-本地 Windows 路径：
+本地 Windows Git 路径：
 
 ```text
-D:\code\anzhuanghaitun\ds_resources\default\resources\jike-cloud-data-pipeline
+D:\code\jike-cloud-data-pipeline
 ```
 
-DolphinScheduler Worker 容器路径：
+真实数据与运行材料：
 
 ```text
-/dolphinscheduler/default/resources/jike-cloud-data-pipeline
+D:\JKY\auth
+D:\JKY\secrets
+D:\JKY\staging
+D:\JKY\output
 ```
 
 ## DolphinScheduler 部署现状

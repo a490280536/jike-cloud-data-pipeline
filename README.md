@@ -2,7 +2,7 @@
 
 通过吉客云网页版导出任务获取数据，下载 xlsx 后写入 MySQL。当前脚本以 DolphinScheduler 部署为目标，同时保留 PyCharm 右键运行方式。
 
-> 仓库边界：`D:\code\anzhuanghaitun` 是 DolphinScheduler 本地运行目录，不是 Git 仓库。实际 Git 项目根目录是当前 `jike-cloud-data-pipeline` 目录。`ds_logs/`、`postgres_data/`、`zk_data/`、`ds_worker_data/` 等运行卷不属于源码，禁止提交。
+> 仓库边界：实际 Git 项目根目录是 `D:\code\jike-cloud-data-pipeline`。真实认证材料、业务数据和运行产物统一放在 `D:\JKY\auth`、`D:\JKY\secrets`、`D:\JKY\staging`、`D:\JKY\output`，不进入 GitHub。完整边界见 [`docs/DEPLOYMENT_BOUNDARIES.md`](docs/DEPLOYMENT_BOUNDARIES.md)。
 
 ## 安全说明
 
