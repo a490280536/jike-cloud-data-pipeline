@@ -15,6 +15,7 @@ AUTOSTART_INSTALLER = ROOT / "scripts" / "install_auth_capture_autostart.ps1"
 
 
 class AuthCaptureAssistantCliTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows-only autostart installer")
     def test_autostart_installer_dry_run_describes_hidden_task(self) -> None:
         completed = subprocess.run(
             [
@@ -101,6 +102,7 @@ class AuthCaptureAssistantCliTests(unittest.TestCase):
             self.assertNotIn("[OK]", combined)
             self.assertLessEqual(len([line for line in combined.splitlines() if line.strip()]), 3)
 
+    @unittest.skipUnless(os.name == "nt", "Windows-only batch launcher")
     def test_windows_launcher_forwards_help_without_cmd_parse_errors(self) -> None:
         completed = subprocess.run(
             ["cmd.exe", "/d", "/c", "call", str(LAUNCHER), "--help"],
@@ -153,6 +155,118 @@ class AuthCaptureAssistantCliTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertEqual(target.read_text(encoding="utf-8"), captured)
             self.assertEqual(len(list(curl_dir.glob("*_curl.txt"))), 1)
+
+    def test_routes_jackyun_stock_query_without_common_verify(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            curl_dir = workspace / "curl"
+            source = workspace / "captured.txt"
+            captured = (
+                "curl 'https://web.jackyun.com/api/stockSkuList?warehouseId=1' "
+                "-H 'user-agent: test-agent' -b 'sessionid=test-cookie'\n"
+            )
+            source.write_text(captured, encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--curl-dir",
+                    str(curl_dir),
+                    "--no-follow-up",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            target = curl_dir / "分仓库查询_curl.txt"
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(target.read_text(encoding="utf-8"), captured)
+
+    def test_routes_jackyun_read_only_list_endpoints_without_common_verify(self) -> None:
+        cases = {
+            "listGoodsDoc": "入库查询_curl.txt",
+            "getsaleschannelinfoforcols": "渠道列表_curl.txt",
+            "batch.stock.search/pagelist": "批次货品库存查询_curl.txt",
+        }
+        for endpoint, filename in cases.items():
+            with self.subTest(endpoint=endpoint):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    workspace = Path(temp_dir)
+                    curl_dir = workspace / "curl"
+                    source = workspace / "captured.txt"
+                    captured = (
+                        f"curl 'https://web.jackyun.com/api/{endpoint}' "
+                        "-H 'user-agent: test-agent' -b 'sessionid=test-cookie'\n"
+                    )
+                    source.write_text(captured, encoding="utf-8")
+
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--source",
+                            str(source),
+                            "--curl-dir",
+                            str(curl_dir),
+                            "--no-follow-up",
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+
+                    target = curl_dir / filename
+                    self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertEqual(target.read_text(encoding="utf-8"), captured)
+
+    def test_routes_jackyun_export_types_to_distinct_files(self) -> None:
+        cases = {
+            "excelType=2": "销售单查询_curl.txt",
+            "excelType=11": "销售单明细账_curl.txt",
+            "excelType=reserve.search": "预留单查询_curl.txt",
+        }
+        for marker, filename in cases.items():
+            with self.subTest(marker=marker):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    workspace = Path(temp_dir)
+                    curl_dir = workspace / "curl"
+                    source = workspace / "captured.txt"
+                    captured = (
+                        "curl 'https://web.jackyun.com/jkyun/excel-service/manager/startExcelExport' "
+                        "-H 'authorization: Bearer test-token' "
+                        "-H 'user-agent: test-agent' -b 'token=test-cookie' "
+                        f"--data-raw 'commonVerify=test-verify&{marker}'\n"
+                    )
+                    source.write_text(captured, encoding="utf-8")
+
+                    completed = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT),
+                            "--source",
+                            str(source),
+                            "--curl-dir",
+                            str(curl_dir),
+                            "--no-follow-up",
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+
+                    target = curl_dir / filename
+                    self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertEqual(target.read_text(encoding="utf-8"), captured)
 
     def test_rejects_unverified_jackyun_export_without_common_verify(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

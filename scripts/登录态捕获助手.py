@@ -36,15 +36,105 @@ class CaptureRoute:
     endpoint: str
     filename: str
     system: str
+    requires_common_verify: bool = True
+    follow_up: bool = True
+    markers: tuple[str, ...] = ()
 
 
 ROUTES = (
+    CaptureRoute(
+        "吉客云销售单导出",
+        "web.jackyun.com",
+        "startExcelExport",
+        "销售单查询_curl.txt",
+        "jackyun",
+        markers=("excelType=2",),
+    ),
+    CaptureRoute(
+        "吉客云销售单明细账导出",
+        "web.jackyun.com",
+        "startExcelExport",
+        "销售单明细账_curl.txt",
+        "jackyun",
+        markers=("excelType=11",),
+    ),
+    CaptureRoute(
+        "吉客云预留单导出",
+        "web.jackyun.com",
+        "startExcelExport",
+        "预留单查询_curl.txt",
+        "jackyun",
+        markers=("excelType=reserve.search",),
+    ),
     CaptureRoute(
         "吉客云销售导出",
         "web.jackyun.com",
         "startExcelExport",
         "每日更新_curl.txt",
         "jackyun",
+    ),
+    CaptureRoute(
+        "吉客云分仓库存查询",
+        "web.jackyun.com",
+        "stockSkuList",
+        "分仓库查询_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云入库查询",
+        "web.jackyun.com",
+        "listGoodsDoc",
+        "入库查询_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云收货查询",
+        "web.jackyun.com",
+        "/jkyun/wms-wis/receive/list",
+        "入库查询_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云渠道列表",
+        "web.jackyun.com",
+        "getsaleschannelinfoforcols",
+        "渠道列表_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云渠道列表真实接口",
+        "web.jackyun.com",
+        "/jkyun/erp-baseinfo/open/salechannel/openlist",
+        "渠道列表_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云渠道筛选列表",
+        "web.jackyun.com",
+        "/jkyun/wms-kernel/order/base/sales/channel",
+        "渠道列表_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
+    ),
+    CaptureRoute(
+        "吉客云批次货品库存查询",
+        "web.jackyun.com",
+        "batch.stock.search/pagelist",
+        "批次货品库存查询_curl.txt",
+        "jackyun",
+        requires_common_verify=False,
+        follow_up=False,
     ),
     CaptureRoute(
         "BSCM正向全链路",
@@ -79,7 +169,11 @@ def identify_capture(raw: str) -> tuple[CaptureRoute, dict]:
         (
             item
             for item in ROUTES
-            if parsed.hostname == item.host and item.endpoint in parsed.path
+            if (
+                parsed.hostname == item.host
+                and item.endpoint in parsed.path
+                and all(marker in raw for marker in item.markers)
+            )
         ),
         None,
     )
@@ -87,7 +181,7 @@ def identify_capture(raw: str) -> tuple[CaptureRoute, dict]:
         raise ValueError("不是当前助手支持的吉客云/BSCM目标接口")
     if not info["cookie"]:
         raise ValueError(f"{route.name} cURL 缺少 Cookie")
-    if route.system == "jackyun":
+    if route.system == "jackyun" and route.requires_common_verify:
         auth = load_source_auth_text(raw)
         if not auth.get("commonVerify"):
             raise ValueError("吉客云 startExcelExport 缺少 commonVerify，请先完成微信公众号验证")
@@ -115,6 +209,8 @@ def print_child_output(completed: subprocess.CompletedProcess[str]) -> None:
 
 
 def run_follow_up(route: CaptureRoute, target: Path, curl_dir: Path, verbose: bool) -> None:
+    if not route.follow_up:
+        return
     child_env = {**os.environ, "PYTHONUTF8": "1"}
     if route.system == "jackyun":
         command = [

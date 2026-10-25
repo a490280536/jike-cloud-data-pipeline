@@ -1,5 +1,12 @@
 export const TARGETS = [
   ["https://web.jackyun.com", "startExcelExport", "吉客云销售导出"],
+  ["https://web.jackyun.com", "stockSkuList", "吉客云分仓库存查询"],
+  ["https://web.jackyun.com", "/jkyun/wms-wis/receive/list", "吉客云收货查询"],
+  ["https://web.jackyun.com", "listGoodsDoc", "吉客云入库查询"],
+  ["https://web.jackyun.com", "getsaleschannelinfoforcols", "吉客云渠道列表"],
+  ["https://web.jackyun.com", "/jkyun/erp-baseinfo/open/salechannel/openlist", "吉客云渠道列表"],
+  ["https://web.jackyun.com", "/jkyun/wms-kernel/order/base/sales/channel", "吉客云渠道列表"],
+  ["https://web.jackyun.com", "batch.stock.search/pagelist", "吉客云批次货品库存查询"],
   ["https://bscm.jinritemai.com", "exportFulfillOrderList", "BSCM正向全链路"],
   ["https://bscm.jinritemai.com", "/api/procurement/po/list", "BSCM货权采购查询"],
   ["https://bscm.jinritemai.com", "/api/gei/generalExport", "BSCM货权采购导出"]
