@@ -1,0 +1,24 @@
+# JKY DolphinScheduler worker 运行依赖锁
+#
+# 与本仓库同 commit 管理；构建上下文为 deploy/ds-worker/。
+# 基础镜像 Python 版本固定为 3.10，因此只收录 cp39-abi3 / 纯 Python 的通用 wheel。
+#
+# cryptography 必需原因：
+#   生产 MySQL 8.0 默认 caching_sha2_password；
+#   PyMySQL 在该插件下需要 cryptography 完成 sha2 认证交换。
+
+certifi==2026.10.23
+charset-normalizer==3.5.2
+cryptography==50.0.2
+et_xmlfile==2.0.0
+idna==3.20
+numpy==2.2.6
+openpyxl==3.1.5
+pandas==2.3.3
+PyMySQL==1.4.6
+python-dateutil==3.0.0
+pytz==2026.5
+requests==2.32.5
+six==1.17.0
+tzdata==2026.5
+urllib3==2.8.0
