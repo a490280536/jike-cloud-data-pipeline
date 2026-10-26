@@ -56,6 +56,14 @@ class CreateFailureClient(FakeDolphinClient):
 
 
 class DolphinSchedulerRollbackTests(unittest.TestCase):
+    def test_recovery_profile_uses_independent_readonly_auth_mount(self) -> None:
+        module = load_scheduler_module()
+        self.assertEqual(len(module.RECOVERY_PREFLIGHT_TASKS), 1)
+        command = module.RECOVERY_PREFLIGHT_TASKS[0].command
+        self.assertIn("--curl-dir /opt/jky_auth", command)
+        self.assertIn("--skip-live", command)
+        self.assertNotIn("curl/", command)
+
     def test_non_dry_run_requires_explicit_profile(self) -> None:
         env = os.environ.copy()
         env.pop("DS_USER", None)

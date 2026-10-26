@@ -140,7 +140,7 @@ RECOVERY_PREFLIGHT_TASKS = (
     TaskSpec(
         "preflight",
         "登录态与账号能力预检",
-        sh("python3 scripts/吉客云同步预检.py --skip-live"),
+        sh("python3 scripts/吉客云同步预检.py --curl-dir /opt/jky_auth --skip-live"),
         "只检查外置认证材料结构与 capability manifest，不调用业务写接口",
         10,
         0,
