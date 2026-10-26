@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -49,6 +50,19 @@ def normalized(text: str) -> str:
     return text.replace("^\r\n", "").replace("^\n", "").replace("^", "")
 
 
+def load_out_of_scope(path: Path | None) -> dict[str, str]:
+    if path is None or not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    values = payload.get("out_of_scope", {})
+    if not isinstance(values, dict):
+        raise ValueError("capability manifest 的 out_of_scope 必须是对象")
+    unknown = sorted(set(values) - set(REQUIRED_CURLS))
+    if unknown:
+        raise ValueError(f"capability manifest 含未知文件名: {', '.join(unknown)}")
+    return {str(name): str(reason) for name, reason in values.items()}
+
+
 def inspect_curl(path: Path) -> list[str]:
     problems: list[str] = []
     if not path.exists():
@@ -62,19 +76,32 @@ def inspect_curl(path: Path) -> list[str]:
         problems.append("缺少 authorization/access_token")
     if not re.search(r"(?:^|[;\s])token=|(?:^|[;\s])_ati=|\bati\s*:|(?:-b|--cookie)\s+", text, re.I):
         problems.append("缺少 cookie/ati 登录态")
-    if path.name in SALES_EXPORT_CURLS and "commonVerify=" not in text:
-        problems.append("缺少 commonVerify，销售导出可能触发手机验证")
     return problems
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="检查吉客云日常同步所需 cURL")
     parser.add_argument("--curl-dir", type=Path, default=CURL_DIR)
+    parser.add_argument(
+        "--capability-manifest",
+        type=Path,
+        help="账号权限边界 JSON；默认读取 <curl-dir>/capability_manifest.json",
+    )
     parser.add_argument("--skip-live", action="store_true", help="仅排障时跳过渠道列表登录态实测")
     args = parser.parse_args()
 
+    manifest_path = args.capability_manifest or args.curl_dir / "capability_manifest.json"
+    try:
+        out_of_scope = load_out_of_scope(manifest_path)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"[FAIL] capability manifest: {exc}", flush=True)
+        raise SystemExit(2) from exc
+
     failed = False
     for name in REQUIRED_CURLS:
+        if name in out_of_scope:
+            print(f"[SKIP] {name}: OUT_OF_SCOPE_BY_PERMISSION；{out_of_scope[name]}", flush=True)
+            continue
         path = args.curl_dir / name
         problems = inspect_curl(path)
         if problems:
@@ -82,6 +109,14 @@ def main() -> None:
             print(f"[FAIL] {name}: {'；'.join(problems)}", flush=True)
         else:
             print(f"[OK] {name}", flush=True)
+            if name in SALES_EXPORT_CURLS:
+                text = normalized(path.read_text(encoding="utf-8", errors="ignore"))
+                if "commonVerify=" not in text:
+                    print(
+                        f"[INFO] {name}: 无 commonVerify，将按非明文模式导出；"
+                        "仅当吉客云实际返回 verifyType 时才需要手机验证",
+                        flush=True,
+                    )
     if failed:
         raise SystemExit(2)
     if not args.skip_live:
