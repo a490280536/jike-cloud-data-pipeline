@@ -100,7 +100,7 @@ def main() -> None:
     failed = False
     for name in REQUIRED_CURLS:
         if name in out_of_scope:
-            print(f"[SKIP] {name}: OUT_OF_SCOPE_BY_PERMISSION；{out_of_scope[name]}", flush=True)
+            print(f"[SKIP] {name}: {out_of_scope[name]}", flush=True)
             continue
         path = args.curl_dir / name
         problems = inspect_curl(path)

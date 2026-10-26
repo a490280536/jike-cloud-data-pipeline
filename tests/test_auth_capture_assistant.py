@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -51,6 +52,44 @@ class AuthCaptureAssistantCliTests(unittest.TestCase):
                     "预留单查询_curl.txt": "账号无权限/无页面",
                 },
             )
+
+    def test_preflight_preserves_external_system_exclusion_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            curl_dir = Path(temp_dir)
+            exclusions = {
+                name: "OUT_OF_SCOPE_BY_PERMISSION：账号无权限/无页面"
+                for name in (
+                    "销售单查询_curl.txt",
+                    "销售单明细账_curl.txt",
+                    "入库查询_curl.txt",
+                    "渠道列表_curl.txt",
+                    "总库存查询_curl.txt",
+                    "分仓库查询_curl.txt",
+                    "批次货品库存查询_curl.txt",
+                    "预留单查询_curl.txt",
+                )
+            }
+            exclusions.update(
+                {
+                    "进口超市上海仓_正向全链路数据_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                    "进口超市上海仓_货权转移采购单_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                    "进口超市上海仓_货权转移采购单导出_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                }
+            )
+            (curl_dir / "capability_manifest.json").write_text(
+                json.dumps({"out_of_scope": exclusions}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(PREFLIGHT), "--curl-dir", str(curl_dir), "--skip-live"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertIn("OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM", completed.stdout)
 
     @unittest.skipUnless(os.name == "nt", "Windows-only autostart installer")
     def test_autostart_installer_dry_run_describes_hidden_task(self) -> None:
