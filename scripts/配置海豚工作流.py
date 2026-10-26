@@ -26,6 +26,7 @@ DAILY_NAME = "吉客云_每日数据总同步"
 WEEKLY_NAME = "吉客云_每周180天历史对账"
 RETENTION_NAME = "BI_ADS_每周版本维护"
 HISTORY_INVENTORY_NAME = "吉客云_历史库存月末快照"
+RECOVERY_PREFLIGHT_NAME = "吉客云_恢复验收预检"
 LEGACY_WORKFLOWS = (
     "吉客云_销售单查询同步",
     "吉客云_销售单明细账",
@@ -134,6 +135,17 @@ HISTORY_INVENTORY_TASKS = (
     TaskSpec("snapshot", "历史库存_最近2个月末", sh("python3 scripts/历史库存_web.py --curl curl/历史库存_curl.txt"), "原子维护最近两个已结束月末的历史库存快照", 240, 1),
 )
 HISTORY_INVENTORY_EDGES = (("preflight", "snapshot"),)
+
+RECOVERY_PREFLIGHT_TASKS = (
+    TaskSpec(
+        "preflight",
+        "登录态与账号能力预检",
+        sh("python3 scripts/吉客云同步预检.py --skip-live"),
+        "只检查外置认证材料结构与 capability manifest，不调用业务写接口",
+        10,
+        0,
+    ),
+)
 
 
 class DolphinClient:
@@ -360,6 +372,16 @@ def upsert_schedule(client: DolphinClient, project_code: int, workflow_code: int
 def main() -> None:
     parser = argparse.ArgumentParser(description="配置吉客云 DolphinScheduler 工作流")
     parser.add_argument("--dry-run", action="store_true", help="只打印目标结构，不调用写接口")
+    parser.add_argument(
+        "--profile",
+        choices=("recovery-preflight", "full"),
+        help="非 dry-run 必须显式选择发布范围；恢复验收只使用 recovery-preflight",
+    )
+    parser.add_argument(
+        "--release-definitions",
+        action="store_true",
+        help="显式将完整业务工作流定义上线；默认所有新定义保持 OFFLINE",
+    )
     parser.add_argument("--enable-daily", action="store_true", help="启用每日09:20计划；默认仅保留工作流供手工执行")
     parser.add_argument("--enable-weekly", action="store_true", help="启用每周180天自动对账；默认仅创建离线定义")
     parser.add_argument("--enable-retention", action="store_true", help="启用每周六02:00 ADS版本维护；默认仅创建离线定义")
@@ -369,6 +391,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.dry_run:
         print(json.dumps({
+            "recovery_preflight": [t.name for t in RECOVERY_PREFLIGHT_TASKS],
             "daily": [t.name for t in DAILY_TASKS],
             "daily_edges": DAILY_EDGES,
             "weekly": [t.name for t in WEEKLY_TASKS],
@@ -378,6 +401,26 @@ def main() -> None:
         }, ensure_ascii=False, indent=2))
         return
 
+    if not args.profile:
+        raise RuntimeError("非 dry-run 必须显式指定 --profile；恢复验收使用 --profile recovery-preflight")
+    if args.profile == "recovery-preflight" and (
+        args.release_definitions
+        or args.enable_daily
+        or args.enable_weekly
+        or args.enable_retention
+        or args.enable_history_inventory
+        or args.start_daily
+    ):
+        raise RuntimeError("recovery-preflight 只允许创建 OFFLINE 预检定义，禁止上线、启用计划或启动实例")
+    if (
+        args.enable_daily
+        or args.enable_weekly
+        or args.enable_retention
+        or args.enable_history_inventory
+        or args.start_daily
+    ) and not args.release_definitions:
+        raise RuntimeError("启用计划或启动实例前必须显式传入 --release-definitions")
+
     username = os.getenv("DS_USER")
     password = os.getenv("DS_PASSWORD")
     if not username or not password:
@@ -385,6 +428,19 @@ def main() -> None:
 
     client = DolphinClient(username, password)
     project_code = client.project_code()
+    if args.profile == "recovery-preflight":
+        upsert_workflow(
+            client,
+            project_code,
+            RECOVERY_PREFLIGHT_NAME,
+            "恢复验收专用：仅执行认证材料结构与账号能力预检，定义保持 OFFLINE。",
+            RECOVERY_PREFLIGHT_TASKS,
+            (),
+            False,
+        )
+        print("[DONE] DolphinScheduler 恢复预检定义已创建并保持 OFFLINE", flush=True)
+        return
+
     daily_code = upsert_workflow(
         client,
         project_code,
@@ -392,7 +448,7 @@ def main() -> None:
         "日常源数据完成后，严格串行执行货权采购、金额DWD、抖音及天猫补全、最近60天品牌回填、质量闸门和ADS。",
         DAILY_TASKS,
         DAILY_EDGES,
-        True,
+        args.release_definitions,
         DAILY_LOCATIONS,
     )
     upsert_schedule(client, project_code, daily_code, "0 20 9 * * ? *", args.enable_daily)
@@ -405,7 +461,7 @@ def main() -> None:
             "每月2日06:00先只读验证历史库存登录态，再原子维护最近两个已结束月末快照。",
             HISTORY_INVENTORY_TASKS,
             HISTORY_INVENTORY_EDGES,
-            True,
+            args.release_definitions,
         )
         upsert_schedule(
             client,
@@ -421,7 +477,7 @@ def main() -> None:
             "每周低峰执行180天长周期对账。默认不自动启用，首次人工验证通过后使用 --enable-weekly 开启。",
             WEEKLY_TASKS,
             WEEKLY_EDGES,
-            args.enable_weekly,
+            args.release_definitions,
         )
         if args.enable_weekly:
             upsert_schedule(client, project_code, weekly_code, "0 0 2 ? * SUN *", True)
@@ -432,7 +488,7 @@ def main() -> None:
             "每周六低峰独立维护ADS历史版本；保留销售和库存最近两个ready版本，不删除批次审计记录。",
             RETENTION_TASKS,
             RETENTION_EDGES,
-            True,
+            args.release_definitions,
         )
         upsert_schedule(client, project_code, retention_code, "0 0 2 ? * SAT *", args.enable_retention)
 

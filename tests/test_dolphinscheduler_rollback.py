@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -54,6 +56,44 @@ class CreateFailureClient(FakeDolphinClient):
 
 
 class DolphinSchedulerRollbackTests(unittest.TestCase):
+    def test_non_dry_run_requires_explicit_profile(self) -> None:
+        env = os.environ.copy()
+        env.pop("DS_USER", None)
+        env.pop("DS_PASSWORD", None)
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT)],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("必须显式指定 --profile", completed.stderr)
+
+    def test_recovery_profile_rejects_release_or_schedule_flags(self) -> None:
+        env = os.environ.copy()
+        env["DS_USER"] = "placeholder"
+        env["DS_PASSWORD"] = "placeholder"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--profile",
+                "recovery-preflight",
+                "--release-definitions",
+            ],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("只允许创建 OFFLINE", completed.stderr)
+
     def test_failed_update_restores_existing_online_workflow(self) -> None:
         module = load_scheduler_module()
         client = FakeDolphinClient(module)
