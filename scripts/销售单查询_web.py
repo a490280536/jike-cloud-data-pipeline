@@ -471,9 +471,13 @@ def load_sales_excel(
     df = pd.read_excel(xlsx_path, dtype=object)
     df.columns = [normalize_column_name(col) for col in df.columns]
     df = df.dropna(how="all")
-    for col in FINAL_COLUMNS:
-        if col not in df.columns:
-            df[col] = pd.NA
+    missing_source_columns = [col for col in ORDERED_COLUMNS if col not in df.columns]
+    if missing_source_columns:
+        raise RuntimeError(
+            "Refusing to import an export with missing required columns: "
+            f"{missing_source_columns}. The Jike export field contract changed; "
+            "update the approved mapping after review instead of silently creating empty columns."
+        )
     df = df[ORDERED_COLUMNS].copy()
     df["updatetime"] = update_time.strftime("%Y-%m-%d %H:%M:%S")
 
