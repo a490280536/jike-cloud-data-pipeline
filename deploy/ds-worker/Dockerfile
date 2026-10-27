@@ -27,5 +27,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* /root/.cache/pip /tmp/requirements.runtime.lock.txt
 
 LABEL org.opencontainers.image.title="JKY DolphinScheduler recovery worker"
-LABEL org.opencontainers.image.source.commit="c0dda2847537a925ea2fa6e0cc648c10d0bf2d6f"
+# 该 label 必须指向【包含本 Dockerfile 的那个 commit】本身。
+# 之前写死 c0dda28（引入 Dockerfile 的那个 commit），导致在其后修正依赖的
+# commit 构建出的镜像仍然声称自己是 c0dda28，provenance 不可证。
+# 正确做法：构建时用 --build-arg SOURCE_COMMIT=<exact commit sha> 传入，
+# 默认值仅作为本地构建的兜底，且必须与实际构建上下文一致。
+ARG SOURCE_COMMIT="c0dda2847537a925ea2fa6e0cc648c10d0bf2d6f"
+LABEL org.opencontainers.image.source.commit="${SOURCE_COMMIT}"
 LABEL org.opencontainers.image.base.digest="sha256:f364676c9ab30cfa6829d4628316f2c654e187dd41deac9f779b34fd5fb91793"
