@@ -138,7 +138,7 @@ def parse_curl_text(raw: str) -> dict[str, Any]:
     if not data_raw:
         raise ValueError("Could not find --data-raw in cURL")
     if not any(part in url for part in
-               ("startExcelExport", "validateExcelExport", "oms/trade/tradeOrderDetialList")):
+               ("startExcelExport", "validateExcelExport", "tradeOrderDetialList")):
         raise ValueError(
             "Please provide a sales-order-detail startExcelExport, validateExcelExport, or tradeOrderDetialList cURL")
 
@@ -293,7 +293,7 @@ def detail_list_params_to_export_params(params: dict[str, str]) -> dict[str, str
 def export_params_from_curl(curl_info: dict[str, Any]) -> dict[str, str]:
     url = curl_info["url"]
     params = dict(curl_info["params"])
-    if "oms/trade/tradeOrderDetialList" in url:
+    if "tradeOrderDetialList" in url:
         print("[INFO] input cURL is tradeOrderDetialList; converting filter params to export params", flush=True)
         return detail_list_params_to_export_params(params)
     if "validateExcelExport" in url:
