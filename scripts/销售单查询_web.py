@@ -522,32 +522,18 @@ def ensure_table(cursor, table_name: str, df: pd.DataFrame) -> None:
         return
 
     cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
-    existing = {row[0] for row in cursor.fetchall()}
-    for col in list(existing):
-        if col not in df.columns:
-            cursor.execute(f"ALTER TABLE `{table_name}` DROP COLUMN `{col}`")
-            existing.remove(col)
-    for index, col in enumerate(df.columns):
-        if col not in existing:
-            position = " FIRST" if index == 0 else f" AFTER `{df.columns[index - 1]}`"
-            cursor.execute(
-                f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` "
-                f"{mysql_type_for_column(col, df[col])}{position}"
-            )
-            existing.add(col)
-
-    cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
     actual_order = [row[0] for row in cursor.fetchall()]
     expected_order = list(df.columns)
     if actual_order != expected_order:
-        reorder_clauses = []
-        for index, col in enumerate(expected_order):
-            position = " FIRST" if index == 0 else f" AFTER `{expected_order[index - 1]}`"
-            reorder_clauses.append(
-                f"MODIFY COLUMN `{col}` {mysql_type_for_column(col, df[col])}{position}"
-            )
-        cursor.execute(f"ALTER TABLE `{table_name}` {', '.join(reorder_clauses)}")
-        print(f"[INFO] reordered columns in {table_name} to match the export definition", flush=True)
+        missing = [col for col in expected_order if col not in actual_order]
+        unexpected = [col for col in actual_order if col not in expected_order]
+        raise RuntimeError(
+            "Refusing destructive schema migration for existing table "
+            f"{table_name!r}: expected {len(expected_order)} columns, "
+            f"found {len(actual_order)}; missing={missing}; unexpected={unexpected}; "
+            "create an explicitly approved migration instead of dropping, adding, "
+            "or reordering columns automatically"
+        )
 
 
 def clean_for_mysql(df: pd.DataFrame) -> pd.DataFrame:
