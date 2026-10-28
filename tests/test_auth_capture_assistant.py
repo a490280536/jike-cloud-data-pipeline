@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -10,11 +12,85 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "登录态捕获助手.py"
+PREFLIGHT = ROOT / "scripts" / "吉客云同步预检.py"
 LAUNCHER = ROOT / "启动登录态捕获助手.cmd"
 AUTOSTART_INSTALLER = ROOT / "scripts" / "install_auth_capture_autostart.ps1"
 
 
 class AuthCaptureAssistantCliTests(unittest.TestCase):
+    def test_preflight_allows_sales_export_without_common_verify(self) -> None:
+        spec = importlib.util.spec_from_file_location("jky_preflight", PREFLIGHT)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            captured = Path(temp_dir) / "销售单查询_curl.txt"
+            captured.write_text(
+                "curl 'https://web.jackyun.com/jkyun/excel-service/manager/startExcelExport' "
+                "-H 'authorization: Bearer test-token' -H 'ati: test-ati' "
+                "-b 'token=test-cookie' --data-raw 'excelType=2&pageSize=50'\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(module.inspect_curl(captured), [])
+
+    def test_preflight_capability_manifest_marks_unavailable_pages_out_of_scope(self) -> None:
+        spec = importlib.util.spec_from_file_location("jky_preflight_capabilities", PREFLIGHT)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = Path(temp_dir) / "capability_manifest.json"
+            manifest.write_text(
+                '{"out_of_scope":{"批次货品库存查询_curl.txt":"账号无权限/无页面",'
+                '"预留单查询_curl.txt":"账号无权限/无页面"}}',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                module.load_out_of_scope(manifest),
+                {
+                    "批次货品库存查询_curl.txt": "账号无权限/无页面",
+                    "预留单查询_curl.txt": "账号无权限/无页面",
+                },
+            )
+
+    def test_preflight_preserves_external_system_exclusion_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            curl_dir = Path(temp_dir)
+            exclusions = {
+                name: "OUT_OF_SCOPE_BY_PERMISSION：账号无权限/无页面"
+                for name in (
+                    "销售单查询_curl.txt",
+                    "销售单明细账_curl.txt",
+                    "入库查询_curl.txt",
+                    "渠道列表_curl.txt",
+                    "总库存查询_curl.txt",
+                    "分仓库查询_curl.txt",
+                    "批次货品库存查询_curl.txt",
+                    "预留单查询_curl.txt",
+                )
+            }
+            exclusions.update(
+                {
+                    "进口超市上海仓_正向全链路数据_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                    "进口超市上海仓_货权转移采购单_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                    "进口超市上海仓_货权转移采购单导出_curl.txt": "OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM",
+                }
+            )
+            (curl_dir / "capability_manifest.json").write_text(
+                json.dumps({"out_of_scope": exclusions}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(PREFLIGHT), "--curl-dir", str(curl_dir), "--skip-live"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertIn("OPTIONAL_EXTERNAL_SYSTEM：抖音 BSCM", completed.stdout)
+
     @unittest.skipUnless(os.name == "nt", "Windows-only autostart installer")
     def test_autostart_installer_dry_run_describes_hidden_task(self) -> None:
         completed = subprocess.run(
@@ -268,7 +344,7 @@ class AuthCaptureAssistantCliTests(unittest.TestCase):
                     self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
                     self.assertEqual(target.read_text(encoding="utf-8"), captured)
 
-    def test_rejects_unverified_jackyun_export_without_common_verify(self) -> None:
+    def test_accepts_non_plaintext_jackyun_export_without_common_verify(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workspace = Path(temp_dir)
             curl_dir = workspace / "curl"
@@ -298,9 +374,10 @@ class AuthCaptureAssistantCliTests(unittest.TestCase):
                 errors="replace",
             )
 
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("commonVerify", completed.stderr)
-            self.assertEqual(list(curl_dir.iterdir()), [])
+            target = curl_dir / "每日更新_curl.txt"
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertTrue(target.exists())
+            self.assertNotIn("commonVerify", target.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

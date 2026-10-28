@@ -36,7 +36,7 @@ class CaptureRoute:
     endpoint: str
     filename: str
     system: str
-    requires_common_verify: bool = True
+    requires_common_verify: bool = False
     follow_up: bool = True
     markers: tuple[str, ...] = ()
 
@@ -48,6 +48,7 @@ ROUTES = (
         "startExcelExport",
         "销售单查询_curl.txt",
         "jackyun",
+        requires_common_verify=False,
         markers=("excelType=2",),
     ),
     CaptureRoute(
@@ -56,6 +57,7 @@ ROUTES = (
         "startExcelExport",
         "销售单明细账_curl.txt",
         "jackyun",
+        requires_common_verify=False,
         markers=("excelType=11",),
     ),
     CaptureRoute(
@@ -64,6 +66,7 @@ ROUTES = (
         "startExcelExport",
         "预留单查询_curl.txt",
         "jackyun",
+        requires_common_verify=False,
         markers=("excelType=reserve.search",),
     ),
     CaptureRoute(
@@ -72,6 +75,7 @@ ROUTES = (
         "startExcelExport",
         "每日更新_curl.txt",
         "jackyun",
+        requires_common_verify=False,
     ),
     CaptureRoute(
         "吉客云分仓库存查询",
@@ -184,7 +188,7 @@ def identify_capture(raw: str) -> tuple[CaptureRoute, dict]:
     if route.system == "jackyun" and route.requires_common_verify:
         auth = load_source_auth_text(raw)
         if not auth.get("commonVerify"):
-            raise ValueError("吉客云 startExcelExport 缺少 commonVerify，请先完成微信公众号验证")
+            raise ValueError("该敏感导出缺少 commonVerify，请先完成平台实际要求的验证")
     return route, info
 
 

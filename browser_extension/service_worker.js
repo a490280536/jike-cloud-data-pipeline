@@ -18,10 +18,11 @@ async function setPaused(tabId, paused) {
   await chrome.storage.session.set({ pausedTabIds: [...next] });
 }
 
-async function setStatus(tabId, text, color) {
+async function setStatus(tabId, text, color, detail = text) {
   await chrome.action.setBadgeText({ tabId, text });
   await chrome.action.setBadgeBackgroundColor({ tabId, color });
-  const status = { lastStatus: text, lastUpdated: new Date().toLocaleString() };
+  await chrome.action.setTitle({ tabId, title: `登录态助手：${detail}` });
+  const status = { lastStatus: detail, lastUpdated: new Date().toLocaleString() };
   if (text !== "!") status.lastError = null;
   await chrome.storage.local.set(status);
 }
@@ -130,11 +131,11 @@ async function sendCapture(tabId, requestId) {
       body: JSON.stringify({ curl, name: item.target.name })
     });
     if (!response.ok) throw new Error(await response.text());
-    await setStatus(tabId, "OK", "#16a34a");
+    await setStatus(tabId, "OK", "#16a34a", `${item.target.name} 已保存`);
   } catch (error) {
     item.sent = false;
     await chrome.storage.local.set({ lastError: error.message, lastUpdated: new Date().toLocaleString() });
-    await setStatus(tabId, "!", "#dc2626");
+    await setStatus(tabId, "!", "#dc2626", `${item.target?.name || "请求"} 保存失败`);
   } finally {
     setTimeout(() => pending.delete(requestId), 10000);
   }
